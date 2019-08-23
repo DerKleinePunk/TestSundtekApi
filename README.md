@@ -1,6 +1,7 @@
 ## Projekt for Testing the Sundtek Api
  
 see [Api Dokumentation](http://sundtek.de/wiki/index.php?title=DAB/DAB%2B)
+[Support Thread](https://support.sundtek.com/index.php?topic=2415.0)
 
 ## Commandline Comands
 ```console
@@ -20,4 +21,7 @@ cat /dev/dab0 | aplay
 cat /dev/radio0 | aplay
 ```
 
+## Addtional Informations
+
+[RDS Doku](http://www.interactive-radio-system.com/docs/EN50067_RDS_Standard.pdf)
 

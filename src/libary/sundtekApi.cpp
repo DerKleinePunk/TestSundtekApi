@@ -6,6 +6,14 @@
 #include <unistd.h>
 #include "sundtekApi.hpp"
 
+//https://stackoverflow.com/questions/24903904/how-to-set-console-cursor-position-for-stdout
+//http://www.elektronik-labor.de/ElektorDSP/ElektroDSP7.html
+
+uint8_t CharCodes[32] {
+    0xE0, 0x85 , 0x82 , 0x8A , 0xE1 , 0x8D , 0xE2 , 0x95 , 0xE3 , 0x97 , 0x9C , 0x80 , 0x20 , 0x00 , 0xE9 , 0x20,
+    0x83, 0x84 , 0x88 , 0x89 , 0x86 , 0x8B , 0x93 , 0x94 , 0x96 , 0x81 , 0x9B , 0x87 , 0x20 , 0x20 , 0x20 , 0x20
+};
+
 deviceManager* sundtekApi::findFmDevice() {
     deviceManager *dm=nullptr;
     for(auto iter=_devices.begin();iter!=_devices.end();++iter) {
@@ -31,8 +39,85 @@ int sundtekApi::openFmDevice(deviceManager* dm) {
     return handle;
 }
 
-sundtekApi::sundtekApi()
-{
+void sundtekApi::ReadRDSData(int handle) { 
+    fm_rds_data data;
+    uint8_t rdsdata[8];
+    memset(&data, 0x00, sizeof(fm_rds_data));
+    uint8_t print_program[9];
+    memset(print_program, 0x00, 9);
+    uint8_t program[9];
+    memset(program, 0x00, 9);
+    int x=0;
+    uint8_t brkstat = 0;
+    uint8_t radiotext[150];
+    memset(radiotext, 0x00, 150);
+    while(1) {
+        net_ioctl(handle, FM_RDS_STATUS, &data);
+        if (data.rdssync) {
+            if (memcmp(rdsdata, data.data, 8)==0) {
+                //Same Block read next
+                continue;
+            }
+            memcpy(rdsdata, data.data, 8);
+
+            if ((data.data[2]>>4) == 0) {
+                //Figure 12 shows the format of type 0A groups and figure 13 the format of type 0B groups.
+                //Program Name with Alternative frequency
+                x = (data.data[3]&0x3)*2;
+                program[x++] = GetAcsiiChar(data.data[6]);
+                program[x++] = GetAcsiiChar(data.data[7]);
+            }
+            if ((data.data[2]>>4) == 2) {
+                x = (data.data[3]&0x0f)*4;
+                if ((data.data[3]&0x10) != brkstat) {
+                    brkstat = data.data[3] & 0x10;
+                    memset(radiotext, 0x00, 150);
+                    //Trans restart
+                }
+                radiotext[x++]=(data.data[4]&0x7f);
+                radiotext[x++]=(data.data[5]&0x7f);
+                radiotext[x++]=(data.data[6]&0x7f);
+                radiotext[x++]=(data.data[7]&0x7f);
+            }
+            usleep(1000);
+
+            if (isprint(program[0]) && isprint(program[1]) && isprint(program[2]) && isprint(program[3])) {
+                memcpy(print_program, program, 9);
+                printf("%c", 0x1B);
+                printf("[9;0H"); //Set Cursor to line 9
+                fflush(stdout);
+                std::cout << "Programm: " << print_program << std::endl;
+                //break;
+            }
+
+            printf("%c", 0x1B);
+            printf("[7;0H"); //Set Cursor to line 7
+
+            printf("RADIOTEXT: ");
+            for (auto i=0;i<64;i++) {
+                switch(radiotext[i]) {
+                    case 0x00:
+                        printf("%c", 0x20);
+                        break;
+                    default:
+                        printf("%c", radiotext[i]);
+                }
+            }
+            printf("\n");
+            fflush(stdout);
+        }
+    }
+}
+
+int8_t sundtekApi::GetAcsiiChar(int8_t zeichen) {
+    if(zeichen < 0x7F) {
+        return zeichen;
+    }
+    zeichen = zeichen - 0x7F;
+    return CharCodes[zeichen];
+}
+
+sundtekApi::sundtekApi() {
 }
 
 sundtekApi::~sundtekApi() {
@@ -90,8 +175,11 @@ int sundtekApi::searchDevices(){
                 }
                 if (device->audio_capture_node[0]) {
                 }
+
                 if (device->capabilities & MEDIA_RDS) {
+                    //Not Set On Stick Why
                 }
+                dm->setCanRDS();
             }
             if (device->capabilities & MEDIA_DAB) {
                 dm->setDabNode(reinterpret_cast<char*>(device->dab_node));
@@ -115,6 +203,8 @@ int sundtekApi::searchDevices(){
     return _devices.size();
 }
 
+/* @brief Search all FMS Stations and Safe FRQ
+*/
 int sundtekApi::searchFmStations(){
     const auto dm = findFmDevice();
     
@@ -146,16 +236,9 @@ int sundtekApi::searchFmStations(){
             case FM_SCAN_LOCKED:
             {
                 std::cout << "FREQUENCY: " << parameters.READFREQ << " LOCKED" << std::endl;
-                fm_rds_data data;
-                memset(&data, 0, sizeof(fm_rds_data));
-                net_ioctl(fd, FM_RDS_STATUS, &data);
-                std::wcout << "Name" << data.PI <<  std::endl;
-                /* if (console>=0) {
-                        printf("FREQUENCY: %d ", parameters.READFREQ);
-                        rv=write(console, "[LOCKED]\n", 9);
-                } else {
-                        fprintf(stdout, "%d [LOCKED]\n", parameters.READFREQ);
-                }*/
+                if(dm->getCanRDS()){
+                    ReadRDSData(fd);
+                }
                 break;
             }
             case FM_SCAN_SEARCHING:

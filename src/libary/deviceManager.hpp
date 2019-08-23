@@ -12,6 +12,7 @@ private:
     char* _deviceName[100];
     uint8_t _deviceId;
     int _fmHandle;
+    bool _canRDS;
 public:
     deviceManager();
     ~deviceManager();
@@ -22,8 +23,10 @@ public:
     void setDeviceId(uint8_t deviceId);
     void setSerial(serialArray value);
     void setDeviceName(char* name);
+    void setCanRDS();
     bool IsFmDevice();
     int getFmHandle();
     void setFmHandle(int handle);
     char* getFmNode();
+    bool getCanRDS();
 };

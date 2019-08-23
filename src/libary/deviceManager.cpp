@@ -7,6 +7,7 @@ deviceManager::deviceManager() {
     _radioNode[0] = 0;
     _dabNode[0] = 0;
     _fmHandle = -1;
+    _canRDS = false;
 }
 
 deviceManager::~deviceManager() {
@@ -39,6 +40,10 @@ void deviceManager::setDeviceName(char* name){
     strcpy(reinterpret_cast<char*>(_deviceName), name);
 }
 
+void deviceManager::setCanRDS() {
+    _canRDS = true;
+}
+
 bool deviceManager::IsFmDevice() {
     if(strlen(reinterpret_cast<char*>(_radioNode)) > 0){
         return true;
@@ -58,3 +63,6 @@ char* deviceManager::getFmNode() {
     return reinterpret_cast<char*>(_radioNode);
 }
 
+bool deviceManager::getCanRDS() {
+    return _canRDS;
+}
