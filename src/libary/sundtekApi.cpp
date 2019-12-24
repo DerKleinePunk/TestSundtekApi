@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <chrono>
 #include "sundtekApi.hpp"
 
 //https://stackoverflow.com/questions/24903904/how-to-set-console-cursor-position-for-stdout
@@ -51,6 +52,7 @@ void sundtekApi::ReadRDSData(int handle) {
     uint8_t brkstat = 0;
     uint8_t radiotext[150];
     memset(radiotext, 0x00, 150);
+    auto searchStart = std::chrono::system_clock::now();
     while(1) {
         net_ioctl(handle, FM_RDS_STATUS, &data);
         if (data.rdssync) {
@@ -60,7 +62,7 @@ void sundtekApi::ReadRDSData(int handle) {
             }
             memcpy(rdsdata, data.data, 8);
 
-            if ((data.data[2]>>4) == 0) {
+            if ((data.data[2]>>4) == 0 || (data.data[2]>>4) == 8) {
                 //Figure 12 shows the format of type 0A groups and figure 13 the format of type 0B groups.
                 //Program Name with Alternative frequency
                 x = (data.data[3]&0x3)*2;
@@ -84,16 +86,17 @@ void sundtekApi::ReadRDSData(int handle) {
             if (isprint(program[0]) && isprint(program[1]) && isprint(program[2]) && isprint(program[3])) {
                 memcpy(print_program, program, 9);
                 printf("%c", 0x1B);
-                printf("[9;0H"); //Set Cursor to line 9
+                printf("[8;0H"); //Set Cursor to line 8
                 fflush(stdout);
                 std::cout << "Programm: " << print_program << std::endl;
-                //break;
+                std::cout << "RDS Data found" << std::endl;
+                break;
             }
 
             printf("%c", 0x1B);
             printf("[7;0H"); //Set Cursor to line 7
 
-            printf("RADIOTEXT: ");
+            printf("Radiotext: ");
             for (auto i=0;i<64;i++) {
                 switch(radiotext[i]) {
                     case 0x00:
@@ -105,6 +108,16 @@ void sundtekApi::ReadRDSData(int handle) {
             }
             printf("\n");
             fflush(stdout);
+        }
+        auto now = std::chrono::system_clock::now();
+        if(now > searchStart + std::chrono::seconds(2)) {
+            printf("%c", 0x1B);
+            printf("[7;0H"); //Set Cursor to line 7
+            fflush(stdout);
+            std::cout << "Radiotext: " << std::endl;
+            std::cout << "Programm: " << std::endl;
+            std::cout << "timeout waiting for RDS Data" << std::endl;
+            break;
         }
     }
 }
@@ -138,7 +151,7 @@ int sundtekApi::searchDevices(){
 
     fd = net_connect(0);
     if (fd<0) {
-        std::cout << "connect failed" << std::endl;
+        std::cout << "connect failed " << strerror(errno) << std::endl;
         return fd;
     }
 
@@ -232,9 +245,10 @@ int sundtekApi::searchFmStations(){
     do {
         net_ioctl(fd, FM_SCAN_NEXT_FREQUENCY, &parameters);
         //printf("LOCK STAT: %x - %d - %d\n", parameters.status, parameters.VALID, parameters.READFREQ);
+        printf("%c", 0x1B);
+        printf("[10;0H"); //Set Cursor to line 10
         switch(parameters.status) {
-            case FM_SCAN_LOCKED:
-            {
+            case FM_SCAN_LOCKED: {
                 std::cout << "FREQUENCY: " << parameters.READFREQ << " LOCKED" << std::endl;
                 if(dm->getCanRDS()){
                     ReadRDSData(fd);

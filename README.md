@@ -20,6 +20,7 @@ get some infos for commandline
 cat /dev/dab0 | aplay
 cat /dev/radio0 | aplay
 ```
+/opt/bin/mediaclient --loglevel max
 
 ## Addtional Informations
 
